@@ -2,7 +2,6 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // 1. ایجاد ریسپانس اولیه
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -10,17 +9,14 @@ export async function middleware(request: NextRequest) {
   })
 
   try {
-    // 2. دریافت متغیرهای محیطی
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    // اگر متغیرها نبودند، ادامه نده (جلوگیری از کرش)
     if (!supabaseUrl || !supabaseKey) {
-      console.error('Supabase Env Vars are missing in Middleware!')
+      console.warn('Supabase Env Vars are missing in Middleware!')
       return response
     }
 
-    // 3. ساخت کلاینت سوپابیس
     const supabase = createServerClient(
       supabaseUrl,
       supabaseKey,
@@ -29,7 +25,8 @@ export async function middleware(request: NextRequest) {
           getAll() {
             return request.cookies.getAll()
           },
-          setAll(cookiesToSet) {
+          // 👇 اینجا هم تایپ رو اضافه کردم که بیلد فیلد نشه
+          setAll(cookiesToSet: { name: string; value: string; options: any }[]) {
             cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
             response = NextResponse.next({
               request: {
@@ -44,11 +41,10 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // 4. رفرش کردن سشن کاربر
     await supabase.auth.getUser()
 
   } catch (e) {
-    // اگر هر خطایی پیش آمد، لاگ بگیر ولی نگذار سایت دان شود
+    // جلوگیری از کرش کردن کل سایت در صورت بروز خطا در میدل‌ور
     console.error('Middleware execution failed:', e)
   }
 
