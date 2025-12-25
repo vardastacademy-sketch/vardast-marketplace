@@ -7,12 +7,12 @@ export async function middleware(request: NextRequest) {
       request,
     })
 
-    // Check for environment variables to prevent crash on Vercel
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    // Check for environment variables, fallback to hardcoded values (Debugging)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://sxbsbpdwubgagvitasvt.supabase.co";
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4YnNicGR3dWJnYWd2aXRhc3Z0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2NjU0MDQsImV4cCI6MjA4MjI0MTQwNH0.86lPaVfHmJgNIjyXZF7-TOlHCmPUDB2qF1xPcOnNFwc";
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn("Supabase environment variables are missing in middleware. Skipping session update.");
+      console.warn("Supabase environment variables are missing in middleware.");
       return supabaseResponse;
     }
 
@@ -50,9 +50,6 @@ export async function middleware(request: NextRequest) {
       !request.nextUrl.pathname.startsWith('/auth')
     ) {
       // no user, potentially respond by redirecting the user to the login page
-      // const url = request.nextUrl.clone()
-      // url.pathname = '/login'
-      // return NextResponse.redirect(url)
     }
 
     return supabaseResponse
@@ -67,13 +64,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
