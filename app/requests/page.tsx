@@ -65,7 +65,7 @@ export default async function RequestsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {requests.map((request) => (
+            {requests.map((request: any) => (
             <div
               key={request.id}
               className="bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-colors flex flex-col md:flex-row justify-between items-start md:items-center gap-6"

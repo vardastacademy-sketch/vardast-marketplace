@@ -122,7 +122,7 @@ export default async function EngineerProfile({
 
         {portfolioItems.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {portfolioItems.map((item) => (
+            {portfolioItems.map((item: any) => (
               <PortfolioCard key={item.id} item={item} />
             ))}
           </div>

@@ -92,7 +92,7 @@ function MessagesContent() {
           table: "messages",
           filter: `receiver_id=eq.${currentUser.id}`, // Listen for incoming
         },
-        (payload) => {
+        (payload: any) => {
             if (payload.new.sender_id === targetUserId) {
                 setMessages((prev) => [...prev, payload.new as Message]);
             }
