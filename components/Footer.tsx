@@ -1,11 +1,15 @@
-export default function Footer() {
+import { dictionary } from '@/utils/i18n';
+
+export default function Footer({ lang }: { lang: string }) {
+  const t = dictionary[lang as keyof typeof dictionary] || dictionary.fa;
+
   return (
-    <footer className="border-t border-slate-800 bg-slate-950 py-8 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center text-slate-400">
-        <p className="text-sm">
-          &copy; {new Date().getFullYear()} Vardast Experts Hub. All rights reserved.
+    <footer className="bg-white border-t border-gray-100 py-12 mt-auto">
+      <div className="max-w-7xl mx-auto px-4 text-center">
+        <p className="text-gray-500 text-sm">{t.copyright}</p>
+        <p className="text-gray-400 text-xs mt-2">
+           Developed by <span className="font-bold text-gray-500">Ostakaran</span>
         </p>
-        <p className="text-xs mt-2 text-slate-500">Powered by Vardast</p>
       </div>
     </footer>
   );
