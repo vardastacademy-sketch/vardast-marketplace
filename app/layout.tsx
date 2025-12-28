@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Vazirmatn } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
+const vazir = Vazirmatn({ subsets: ["arabic"], variable: '--font-vazir' });
 
 export const metadata: Metadata = {
-  title: "Vardast Experts Hub",
-  description: "Find the best AI & Automation Engineers for your Vardast Chatbot",
+  title: "Ostakaran | اوستاکاران",
+  description: "Vardast Experts Directory",
 };
 
 export default function RootLayout({
@@ -17,13 +16,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.className} bg-slate-950 text-slate-200 flex flex-col min-h-screen`}>
-        <Navbar />
-        <main className="flex-grow pt-16">
-          {children}
-        </main>
-        <Footer />
+    <html lang="fa" dir="rtl">
+      <body className={`${inter.variable} ${vazir.variable} font-sans bg-gray-50 text-gray-900 min-h-screen flex flex-col`}>
+        {children}
       </body>
     </html>
   );
