@@ -1,165 +1,152 @@
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- 1. PROFILES TABLE
-CREATE TABLE profiles (
-    id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-    full_name TEXT,
-    avatar_url TEXT,
-    role TEXT CHECK (role IN ('client', 'engineer')),
-    is_verified BOOLEAN DEFAULT false,
-    bio TEXT,
-    skills TEXT[],
-    hourly_rate NUMERIC,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+-- Users Table (Profiles)
+-- This table extends the default auth.users table in Supabase
+create table public.profiles (
+  id uuid not null references auth.users(id) on delete cascade primary key,
+  email text,
+  full_name text,
+  role text default 'engineer' check (role in ('admin', 'engineer')),
+  bio text,
+  avatar_url text,
+  phone text,
+  contact_link text,
+  is_verified boolean default false,
+  rating float default 0,
+  rating_count int default 0,
+  specialties text[], -- Array of categories they specialize in
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
 
--- Enable RLS
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-
--- Policies
-CREATE POLICY "Public profiles are viewable by everyone."
-    ON profiles FOR SELECT
-    USING (true);
-
-CREATE POLICY "Users can insert their own profile."
-    ON profiles FOR INSERT
-    WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "Users can update their own profile."
-    ON profiles FOR UPDATE
-    USING (auth.uid() = id);
-
--- 2. PORTFOLIO_ITEMS TABLE
-CREATE TABLE portfolio_items (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    engineer_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-    client_name TEXT NOT NULL,
-    client_logo_url TEXT,
-    project_link TEXT,
-    platform_type TEXT CHECK (platform_type IN ('Telegram', 'Instagram', 'Web')),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Projects Table (Portfolio)
+create table public.projects (
+  id uuid default gen_random_uuid() primary key,
+  engineer_id uuid not null references public.profiles(id) on delete cascade,
+  business_name text not null,
+  description text,
+  platform text check (platform in ('telegram', 'instagram', 'web', 'other')),
+  chat_url text,
+  image_url text,
+  created_at timestamptz default now()
 );
 
--- Enable RLS
-ALTER TABLE portfolio_items ENABLE ROW LEVEL SECURITY;
-
--- Policies
-CREATE POLICY "Portfolio items are viewable by everyone."
-    ON portfolio_items FOR SELECT
-    USING (true);
-
-CREATE POLICY "Engineers can manage their own portfolio items."
-    ON portfolio_items FOR ALL
-    USING (auth.uid() = engineer_id);
-
--- 3. REQUESTS TABLE (Job Board)
-CREATE TABLE requests (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    client_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    budget NUMERIC,
-    category TEXT CHECK (category IN ('Vardast Architects', 'AI Image Gen', 'AI Video Gen', 'AI Web/App', 'Automation')),
-    status TEXT DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'completed', 'cancelled')),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Reviews Table
+create table public.reviews (
+  id uuid default gen_random_uuid() primary key,
+  engineer_id uuid not null references public.profiles(id) on delete cascade,
+  reviewer_name text,
+  rating int check (rating >= 1 and rating <= 5),
+  comment text,
+  status text default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz default now()
 );
 
--- Enable RLS
-ALTER TABLE requests ENABLE ROW LEVEL SECURITY;
-
--- Policies
-CREATE POLICY "Requests are viewable by everyone."
-    ON requests FOR SELECT
-    USING (true);
-
-CREATE POLICY "Clients can manage their own requests."
-    ON requests FOR ALL
-    USING (auth.uid() = client_id);
-
--- 4. MESSAGES TABLE
-CREATE TABLE messages (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    sender_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-    receiver_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-    content TEXT NOT NULL,
-    is_read BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Job Requests Table (NEW)
+create table public.requests (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  description text not null,
+  category text not null, -- One of the 5 fixed categories
+  budget text, -- "Negotiable" or specific amount
+  deadline text,
+  contact_type text check (contact_type in ('phone', 'email', 'telegram', 'whatsapp')),
+  contact_value text not null,
+  status text default 'open' check (status in ('open', 'closed')),
+  created_at timestamptz default now()
 );
 
--- Enable RLS
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-
--- Policies
-CREATE POLICY "Users can view their own messages."
-    ON messages FOR SELECT
-    USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-
-CREATE POLICY "Users can insert messages as sender."
-    ON messages FOR INSERT
-    WITH CHECK (auth.uid() = sender_id);
-
--- 5. PRODUCTS TABLE (Store)
-CREATE TABLE products (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    engineer_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-    title TEXT NOT NULL,
-    price NUMERIC NOT NULL,
-    asset_url TEXT, -- Link to the digital asset
-    type TEXT CHECK (type IN ('prompt', 'workflow')),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Site Content (CMS)
+create table public.site_content (
+  key text primary key,
+  value text,
+  description text
 );
 
--- Enable RLS
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+-- Enable Row Level Security (RLS)
+alter table public.profiles enable row level security;
+alter table public.projects enable row level security;
+alter table public.reviews enable row level security;
+alter table public.site_content enable row level security;
+alter table public.requests enable row level security;
 
 -- Policies
-CREATE POLICY "Products are viewable by everyone."
-    ON products FOR SELECT
-    USING (true);
 
-CREATE POLICY "Engineers can manage their own products."
-    ON products FOR ALL
-    USING (auth.uid() = engineer_id);
+-- PROFILES
+create policy "Public profiles are viewable by everyone"
+  on public.profiles for select using (true);
 
--- TRIGGER TO HANDLE NEW USER SIGNUP (Optional but recommended)
--- This assumes that when a user signs up, a profile row is created.
--- In a real Supabase app, you'd often use a database trigger for this.
+create policy "Users can update own profile"
+  on public.profiles for update using (auth.uid() = id);
 
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name, avatar_url)
-  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url');
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- PROJECTS
+create policy "Projects are viewable by everyone"
+  on public.projects for select using (true);
 
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+create policy "Engineers can insert own projects"
+  on public.projects for insert with check (auth.uid() = engineer_id);
 
--- STORAGE BUCKETS (If using Supabase Storage)
--- You would typically create buckets 'avatars', 'portfolio', 'products' via the dashboard or SQL.
--- Example for avatars:
-INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true) ON CONFLICT DO NOTHING;
-INSERT INTO storage.buckets (id, name, public) VALUES ('portfolio', 'portfolio', true) ON CONFLICT DO NOTHING;
-INSERT INTO storage.buckets (id, name, public) VALUES ('products', 'products', false) ON CONFLICT DO NOTHING; -- Products might be private
+create policy "Engineers can update own projects"
+  on public.projects for update using (auth.uid() = engineer_id);
 
--- Storage Policies (Simplified examples)
-CREATE POLICY "Avatar images are publicly accessible."
-  ON storage.objects FOR SELECT
-  USING ( bucket_id = 'avatars' );
+create policy "Engineers can delete own projects"
+  on public.projects for delete using (auth.uid() = engineer_id);
 
-CREATE POLICY "Anyone can upload an avatar."
-  ON storage.objects FOR INSERT
-  WITH CHECK ( bucket_id = 'avatars' AND auth.role() = 'authenticated' );
+-- REVIEWS
+create policy "Anyone can insert reviews"
+  on public.reviews for insert with check (true);
 
-CREATE POLICY "Portfolio images are publicly accessible."
-  ON storage.objects FOR SELECT
-  USING ( bucket_id = 'portfolio' );
+create policy "Public can view approved reviews"
+  on public.reviews for select using (status = 'approved');
 
-CREATE POLICY "Authenticated users can upload portfolio images."
-  ON storage.objects FOR INSERT
-  WITH CHECK ( bucket_id = 'portfolio' AND auth.role() = 'authenticated' );
+-- REQUESTS (Job Board)
+create policy "Anyone can insert requests"
+  on public.requests for insert with check (true);
+
+create policy "Public can view open requests"
+  on public.requests for select using (status = 'open');
+
+-- ADMIN Policies (Using function)
+create or replace function public.is_admin()
+returns boolean as $$
+begin
+  return exists (
+    select 1 from public.profiles
+    where id = auth.uid()
+    and role = 'admin'
+  );
+end;
+$$ language plpgsql security definer;
+
+-- Admin All Access
+create policy "Admins can view all reviews" on public.reviews for select using (public.is_admin());
+create policy "Admins can update reviews" on public.reviews for update using (public.is_admin());
+create policy "Admins can delete reviews" on public.reviews for delete using (public.is_admin());
+
+create policy "Admins can view all requests" on public.requests for select using (public.is_admin());
+create policy "Admins can update requests" on public.requests for update using (public.is_admin());
+create policy "Admins can delete requests" on public.requests for delete using (public.is_admin());
+
+create policy "Admins can update content" on public.site_content for update using (public.is_admin());
+create policy "Admins can insert content" on public.site_content for insert with check (public.is_admin());
+create policy "Content is viewable by everyone" on public.site_content for select using (true);
+
+-- User Signup Trigger
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, email, full_name, role)
+  values (new.id, new.email, new.raw_user_meta_data->>'full_name', 'engineer');
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create or replace trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- Seed Default Content
+insert into public.site_content (key, value, description) values
+('home_hero_title_fa', 'بهترین مهندسین هوش مصنوعی را پیدا کنید', 'Title of the hero section in Persian'),
+('home_hero_subtitle_fa', 'دسترسی مستقیم به متخصصین ساخت چت‌بات و اتوماسیون', 'Subtitle of the hero section in Persian'),
+('home_hero_title_en', 'Find the Best AI Experts', 'Title of the hero section in English'),
+('home_hero_subtitle_en', 'Direct access to Chatbot and Automation specialists', 'Subtitle of the hero section in English')
+on conflict (key) do nothing;
