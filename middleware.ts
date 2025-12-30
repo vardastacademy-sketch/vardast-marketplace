@@ -1,60 +1,85 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { updateSession } from '@/utils/supabase/middleware'
-
-const locales = ['fa', 'en']
-const defaultLocale = 'fa'
-
-function getLocale(request: NextRequest) {
-  // Simple logic: default to 'fa'
-  return defaultLocale
-}
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({
+    request,
+  })
+
+  // Hardcoded fallback values to ensure Edge Runtime has access to keys
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://sxbsbpdwubgagvitasvt.supabase.co";
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4YnNicGR3dWJnYWd2aXRhc3Z0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2NjU0MDQsImV4cCI6MjA4MjI0MTQwNH0.86lPaVfHmJgNIjyXZF7-TOlHCmPUDB2qF1xPcOnNFwc";
+
   try {
-    // 1. Update Supabase Session (Auth)
-    // We await this, but if it fails, we catch it below to prevent 500 error
-    const response = await updateSession(request)
-
-    // 2. Handle i18n
-    const { pathname } = request.nextUrl
-
-    // Check if there is any supported locale in the pathname
-    const pathnameHasLocale = locales.some(
-      (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
+    const supabase = createServerClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+            supabaseResponse = NextResponse.next({
+              request,
+            })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              supabaseResponse.cookies.set(name, value, options)
+            )
+          },
+        },
+      }
     )
 
-    // Avoid redirecting for API, static files, etc.
+    // IMPORTANT: Avoid writing any logic between createServerClient and
+    // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+    // issues with users being randomly logged out.
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    // I18n Logic integrated here to keep everything in one Edge-compatible file
+    const locales = ['fa', 'en']
+    const defaultLocale = 'fa'
+    const { pathname } = request.nextUrl
+
+    // 1. Skip if API, static file, or image
     if (
       pathname.startsWith('/_next') ||
       pathname.startsWith('/api') ||
       pathname.includes('.')
     ) {
-      return response
+      return supabaseResponse
     }
 
-    if (pathnameHasLocale) return response
+    // 2. Check if path has locale
+    const pathnameHasLocale = locales.some(
+      (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
+    )
 
-    // Redirect if there is no locale
-    const locale = getLocale(request)
-    request.nextUrl.pathname = `/${locale}${pathname}`
+    if (pathnameHasLocale) {
+      return supabaseResponse
+    }
 
-    // Return the response with the redirect, preserving cookies from updateSession
-    // Note: NextResponse.redirect creates a NEW response, so we need to copy cookies if we want to persist session
+    // 3. Redirect to default locale if missing
+    // We reuse the cookies from supabaseResponse to ensure session is preserved
+    request.nextUrl.pathname = `/${defaultLocale}${pathname}`
     const redirectResponse = NextResponse.redirect(request.nextUrl)
 
-    // Copy cookies from the Supabase response to the redirect response
-    response.cookies.getAll().forEach((cookie) => {
+    // Copy cookies
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value)
     })
 
     return redirectResponse
 
   } catch (e) {
-    console.error("Middleware Error:", e);
-    // In case of error, just pass the request through to avoid 500
-    // We might lose auth session refresh here, but the site will load.
-    return NextResponse.next()
+    // If Supabase client fails (e.g. invalid URL), we still want the app to function
+    // just without auth state, so we proceed with a basic response
+    console.error("Middleware Supabase Error:", e)
+    return NextResponse.next({ request })
   }
 }
 
