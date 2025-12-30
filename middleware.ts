@@ -1,52 +1,34 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
+// Middleware is now purely for i18n routing and basic headers
+// Auth logic has been moved to Layouts/Server Components to avoid Edge Runtime crashes
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  const locales = ['fa', 'en']
+  const defaultLocale = 'fa'
 
-  // Defensive check for keys
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    return response
+  // 1. Skip if API, static file, or image
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api') ||
+    pathname.includes('.')
+  ) {
+    return NextResponse.next()
   }
 
-  try {
-    const supabase = createServerClient(
-      supabaseUrl,
-      supabaseKey,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-            cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-            response = NextResponse.next({
-              request: {
-                headers: request.headers,
-              },
-            })
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
+  // 2. Check if path has locale
+  const pathnameHasLocale = locales.some(
+    (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
+  )
 
-    await supabase.auth.getUser()
-  } catch (e) {
-    // Fail silently if Supabase crashes, keeping the site alive
-    console.error('Middleware Error:', e)
+  if (pathnameHasLocale) {
+    return NextResponse.next()
   }
 
-  return response
+  // 3. Redirect to default locale if missing
+  request.nextUrl.pathname = `/${defaultLocale}${pathname}`
+  return NextResponse.redirect(request.nextUrl)
 }
 
 export const config = {
